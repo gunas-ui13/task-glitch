@@ -164,13 +164,33 @@ export function useTasks(): UseTasksState {
     });
   }, []);
 
+  // ... existing code ...
+  
   const undoDelete = useCallback(() => {
     if (!lastDeleted) return;
     setTasks(prev => [...prev, lastDeleted]);
     setLastDeleted(null);
   }, [lastDeleted]);
 
-  return { tasks, loading, error, derivedSorted, metrics, lastDeleted, addTask, updateTask, deleteTask, undoDelete };
+  // Make sure this function exists right before the return!
+  const clearLastDeleted = useCallback(() => {
+    setLastDeleted(null);
+  }, []);
+
+  // UPDATE THIS PART:
+  return { 
+    tasks, 
+    loading, 
+    error, 
+    derivedSorted, 
+    metrics, 
+    lastDeleted, 
+    addTask, 
+    updateTask, 
+    deleteTask, 
+    undoDelete, 
+    clearLastDeleted // <--- ADD THIS HERE
+  };
 }
 
 

@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  InputLabel,
   MenuItem,
-  Select,
   Stack,
   TextField,
 } from '@mui/material';
@@ -17,134 +14,137 @@ import { Priority, Status, Task } from '@/types';
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSubmit: (value: Omit<Task, 'id'> & { id?: string }) => void;
+  onSubmit: (task: Omit<Task, 'id'> & { id?: string }) => void;
   existingTitles: string[];
   initial?: Task | null;
 }
 
-const priorities: Priority[] = ['High', 'Medium', 'Low'];
-const statuses: Status[] = ['Todo', 'In Progress', 'Done'];
-
 export default function TaskForm({ open, onClose, onSubmit, existingTitles, initial }: Props) {
   const [title, setTitle] = useState('');
-  const [revenue, setRevenue] = useState<number | ''>('');
-  const [timeTaken, setTimeTaken] = useState<number | ''>('');
-  const [priority, setPriority] = useState<Priority | ''>('');
-  const [status, setStatus] = useState<Status | ''>('');
+  const [revenue, setRevenue] = useState<string | number>('');
+  const [timeTaken, setTimeTaken] = useState<string | number>('');
+  const [priority, setPriority] = useState<Priority>('Low');
+  
+  // FIX 1: Default status to 'Todo' to prevent empty string error
+  const [status, setStatus] = useState<Status>('Todo'); 
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    if (!open) return;
-    if (initial) {
-      setTitle(initial.title);
-      setRevenue(initial.revenue);
-      setTimeTaken(initial.timeTaken);
-      setPriority(initial.priority);
-      setStatus(initial.status);
-      setNotes(initial.notes ?? '');
-    } else {
-      setTitle('');
-      setRevenue('');
-      setTimeTaken('');
-      setPriority('');
-      setStatus('');
-      setNotes('');
+    if (open) {
+      if (initial) {
+        setTitle(initial.title);
+        setRevenue(initial.revenue);
+        setTimeTaken(initial.timeTaken);
+        setPriority(initial.priority);
+        setStatus(initial.status);
+        setNotes(initial.notes || '');
+      } else {
+        // Reset form for new task
+        setTitle('');
+        setRevenue('');
+        setTimeTaken('');
+        setPriority('Low');
+        setStatus('Todo');
+        setNotes('');
+      }
     }
   }, [open, initial]);
 
-  const duplicateTitle = useMemo(() => {
-    const current = title.trim().toLowerCase();
-    if (!current) return false;
-    const others = initial ? existingTitles.filter(t => t.toLowerCase() !== initial.title.toLowerCase()) : existingTitles;
-    return others.map(t => t.toLowerCase()).includes(current);
-  }, [title, existingTitles, initial]);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title) return;
 
-  const canSubmit =
-    !!title.trim() &&
-    !duplicateTitle &&
-    typeof revenue === 'number' && revenue >= 0 &&
-    typeof timeTaken === 'number' && timeTaken > 0 &&
-    !!priority &&
-    !!status;
-
-  const handleSubmit = () => {
-    const safeTime = typeof timeTaken === 'number' && timeTaken > 0 ? timeTaken : 1; // auto-correct
-    const payload: Omit<Task, 'id'> & { id?: string } = {
-      title: title.trim(),
-      revenue: typeof revenue === 'number' ? revenue : 0,
-      timeTaken: safeTime,
-      priority: ((priority || 'Medium') as Priority),
-      status: ((status || 'Todo') as Status),
-      notes: notes.trim() || undefined,
-      ...(initial ? { id: initial.id } : {}),
-    };
-    onSubmit(payload);
+    // FIX 2: Ensure status is never empty by using || 'Todo'
+    // FIX 3: Add createdAt and completedAt to satisfy TypeScript
+    onSubmit({
+      id: initial?.id,
+      title,
+      revenue: Number(revenue),
+      timeTaken: Number(timeTaken),
+      priority,
+      status: (status || 'Todo') as Status, 
+      notes,
+      createdAt: initial?.createdAt || new Date().toISOString(),
+      completedAt: initial?.completedAt,
+    });
     onClose();
   };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>{initial ? 'Edit Task' : 'Add Task'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} mt={1}>
-          <TextField
-            label="Title"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            error={!!title && duplicateTitle}
-            helperText={duplicateTitle ? 'Duplicate title not allowed' : ' '}
-            required
-            autoFocus
-          />
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+      <form onSubmit={handleSubmit}>
+        <DialogTitle>{initial ? 'Edit Task' : 'Add New Task'}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Revenue"
-              type="number"
-              value={revenue}
-              onChange={e => setRevenue(e.target.value === '' ? '' : Number(e.target.value))}
-              inputProps={{ min: 0, step: 1 }}
+              label="Task Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               required
-              fullWidth
+              autoFocus
+              error={!initial && existingTitles.includes(title)}
+              helperText={!initial && existingTitles.includes(title) ? 'Title already exists' : ''}
             />
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="Revenue ($)"
+                type="number"
+                value={revenue}
+                onChange={(e) => setRevenue(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Time Taken (h)"
+                type="number"
+                value={timeTaken}
+                onChange={(e) => setTimeTaken(e.target.value)}
+                fullWidth
+              />
+            </Stack>
+            <Stack direction="row" spacing={2}>
+              <TextField
+                select
+                label="Priority"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as Priority)}
+                fullWidth
+              >
+                <MenuItem value="High">High</MenuItem>
+                <MenuItem value="Medium">Medium</MenuItem>
+                <MenuItem value="Low">Low</MenuItem>
+              </TextField>
+              <TextField
+                select
+                label="Status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as Status)}
+                fullWidth
+              >
+                <MenuItem value="Todo">Todo</MenuItem>
+                <MenuItem value="In Progress">In Progress</MenuItem>
+                <MenuItem value="Done">Done</MenuItem>
+              </TextField>
+            </Stack>
             <TextField
-              label="Time Taken (h)"
-              type="number"
-              value={timeTaken}
-              onChange={e => setTimeTaken(e.target.value === '' ? '' : Number(e.target.value))}
-              inputProps={{ min: 1, step: 1 }}
-              required
-              fullWidth
+              label="Notes"
+              multiline
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <FormControl fullWidth required>
-              <InputLabel id="priority-label">Priority</InputLabel>
-              <Select labelId="priority-label" label="Priority" value={priority} onChange={e => setPriority(e.target.value as Priority)}>
-                {priorities.map(p => (
-                  <MenuItem key={p} value={p}>{p}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required>
-              <InputLabel id="status-label">Status</InputLabel>
-              <Select labelId="status-label" label="Status" value={status} onChange={e => setStatus(e.target.value as Status)}>
-                {statuses.map(s => (
-                  <MenuItem key={s} value={s}>{s}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-          <TextField label="Notes" value={notes} onChange={e => setNotes(e.target.value)} multiline minRows={2} />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={!canSubmit}>
-          {initial ? 'Save Changes' : 'Add Task'}
-        </Button>
-      </DialogActions>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={!title || (!initial && existingTitles.includes(title))}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 }
-
-
